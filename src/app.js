@@ -19,6 +19,21 @@ const swaggerOptions = {
         description: "SwaggerUI",
       },
     ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+          description: "Nhập JWT token vào đây (không cần nhập chữ Bearer)",
+        },
+      },
+    },
+    security: [
+      {
+        bearerAuth: [],
+      },
+    ],
   },
   apis: ["./src/routes/*.js"], // Quét các comment swagger trong thư mục routes
 };
