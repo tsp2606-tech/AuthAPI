@@ -1,9 +1,22 @@
 const express = require("express");
+const cors = require("cors");
 const authRoutes = require("./routes/auth.routes");
 const swaggerUi = require("swagger-ui-express");
 const swaggerJsdoc = require("swagger-jsdoc");
 
 const app = express();
+
+const corsOptions = {
+  origin: [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://auth-fe-thaisonpham26.vercel.app"
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
 
 const swaggerOptions = {
   swaggerDefinition: {
