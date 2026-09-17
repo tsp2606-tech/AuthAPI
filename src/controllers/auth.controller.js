@@ -232,14 +232,24 @@ const changeRole = async (req, res, next) => {
       });
     }
 
-    const updatedUser = await userService.changeUserRole(id, role);
-    if (!updatedUser) {
+    const user = await userService.findUserById(id);
+    if (!user) {
       return res.status(404).json({
         message: "Không tìm thấy người dùng",
         error: "NotFound",
         statusCode: 404
       });
     }
+
+    if (user.role === role) {
+      return res.status(400).json({
+        message: `Người dùng này đã là ${role}`,
+        error: "BadRequest",
+        statusCode: 400
+      });
+    }
+
+    const updatedUser = await userService.changeUserRole(id, role);
 
     return res.status(200).json({
       message: "Đổi quyền thành công",
