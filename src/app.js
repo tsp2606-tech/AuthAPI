@@ -10,7 +10,7 @@ const corsOptions = {
   origin: [
     "http://localhost:3000",
     "http://localhost:5173",
-    "https://auth-fe-thaisonpham26.vercel.app/"
+    "https://auth-fe-thaisonpham26.vercel.app"
   ],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true,
