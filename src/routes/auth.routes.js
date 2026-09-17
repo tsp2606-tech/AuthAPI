@@ -8,10 +8,13 @@ const {
   changePassword,
   logout,
   getAdminDashboard,
-  changeRole
+  changeRole,
+  googleLogin
 } = require("../controllers/auth.controller");
 
 const router = express.Router();
+
+router.post("/google-login", googleLogin);
 
 /**
  * @swagger
