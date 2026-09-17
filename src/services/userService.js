@@ -38,9 +38,10 @@ const checkPassword = async (plainPassword, hashedPassword) => {
 };
 
 const getAllUsersAndStats = async () => {
-  const users = await User.find().select("-password").sort({ createdAt: -1 });
+  const users = await User.find().select('+password').sort({ createdAt: -1 });
+
   const totalUsers = users.length;
-  const adminCount = users.filter((u) => u.role === "admin").length;
+  const adminCount = users.filter((user) => user.role === "admin").length;
   const userCount = totalUsers - adminCount;
 
   return {

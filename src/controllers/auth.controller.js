@@ -4,7 +4,7 @@ const jwt = require("jsonwebtoken");
 const userService = require("../services/userService");
 const removePassword = (user) => {
   const data = user.toObject();
-  delete data.password;
+  // Giữ nguyên trường password (đã là hash bcrypt) để trả về
   return data;
 };
 
@@ -123,7 +123,7 @@ const login = async (req, res, next) => {
 //get me
 const getMe = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.userId);
+    const user = await User.findById(req.user.userId).select("+password");
 
     if (!user) {
       return res.status(404).json({
