@@ -1,3 +1,5 @@
 .env
 user.http
 node_modules
+scan_project.py
+output.txt

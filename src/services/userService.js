@@ -37,10 +37,38 @@ const checkPassword = async (plainPassword, hashedPassword) => {
   return await bcrypt.compare(plainPassword, hashedPassword);
 };
 
+const getAllUsersAndStats = async () => {
+  const users = await User.find().select("-password").sort({ createdAt: -1 });
+  const totalUsers = users.length;
+  const adminCount = users.filter((u) => u.role === "admin").length;
+  const userCount = totalUsers - adminCount;
+
+  return {
+    stats: {
+      totalUsers,
+      adminCount,
+      userCount,
+    },
+    users,
+  };
+};
+
+const changeUserRole = async (userId, newRole) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    return null; // Không tìm thấy
+  }
+  user.role = newRole;
+  await user.save();
+  return user;
+};
+
 module.exports = {
   findUserByEmail,
   findUserById,
   createUser,
   updateUserPassword,
   checkPassword,
+  getAllUsersAndStats,
+  changeUserRole,
 };

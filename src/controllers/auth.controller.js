@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const User = require("../models/user.model");
 const jwt = require("jsonwebtoken");
+const userService = require("../services/userService");
 const removePassword = (user) => {
   const data = user.toObject();
   delete data.password;
@@ -204,10 +205,57 @@ const logout = async (req, res) => {
   });
 };
 
+//ham admin dashboard
+const getAdminDashboard = async (req, res, next) => {
+  try {
+    const data = await userService.getAllUsersAndStats();
+    return res.status(200).json({
+      message: "Dữ liệu Admin Dashboard",
+      ...data
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+//ham doi role
+const changeRole = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
+
+    if (!role || !["admin", "user"].includes(role)) {
+      return res.status(400).json({
+        message: "Role không hợp lệ (chỉ nhận 'admin' hoặc 'user')",
+        error: "BadRequest",
+        statusCode: 400
+      });
+    }
+
+    const updatedUser = await userService.changeUserRole(id, role);
+    if (!updatedUser) {
+      return res.status(404).json({
+        message: "Không tìm thấy người dùng",
+        error: "NotFound",
+        statusCode: 404
+      });
+    }
+
+    return res.status(200).json({
+      message: "Đổi quyền thành công",
+      user: removePassword(updatedUser)
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
   getMe,
   changePassword,
-  logout
+  logout,
+  getAdminDashboard,
+  changeRole
 };

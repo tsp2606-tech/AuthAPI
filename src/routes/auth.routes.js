@@ -6,7 +6,9 @@ const {
   login,
   getMe,
   changePassword,
-  logout
+  logout,
+  getAdminDashboard,
+  changeRole
 } = require("../controllers/auth.controller");
 
 const router = express.Router();
@@ -246,7 +248,7 @@ router.put(
  * @swagger
  * /api/auth/admin/dashboard:
  *   get:
- *     summary: Lấy dữ liệu dành riêng cho Admin
+ *     summary: Lấy dữ liệu và thống kê dành riêng cho Admin
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
@@ -260,7 +262,23 @@ router.put(
  *               properties:
  *                 message:
  *                   type: string
- *                   example: Bạn đã truy cập khu vực admin
+ *                   example: Dữ liệu Admin Dashboard
+ *                 stats:
+ *                   type: object
+ *                   properties:
+ *                     totalUsers:
+ *                       type: integer
+ *                       example: 10
+ *                     adminCount:
+ *                       type: integer
+ *                       example: 2
+ *                     userCount:
+ *                       type: integer
+ *                       example: 8
+ *                 users:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/User'
  *       401:
  *         description: Token không hợp lệ
  *       403:
@@ -270,9 +288,64 @@ router.get(
   "/admin/dashboard",
   authMiddleware,
   authorizeRoles("admin"),
-  (req, res) => {
-    res.json({ message: "Admin data" });
-  }
+  getAdminDashboard
+);
+
+/**
+ * @swagger
+ * /api/auth/{id}/role:
+ *   patch:
+ *     summary: Thay đổi quyền của người dùng (Chỉ Admin)
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của người dùng cần đổi quyền
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - role
+ *             properties:
+ *               role:
+ *                 type: string
+ *                 enum: [user, admin]
+ *                 example: admin
+ *     responses:
+ *       200:
+ *         description: Đổi quyền thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Đổi quyền thành công
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *       400:
+ *         description: Role không hợp lệ
+ *       401:
+ *         description: Token không hợp lệ
+ *       403:
+ *         description: Không có quyền truy cập (không phải admin)
+ *       404:
+ *         description: Không tìm thấy người dùng
+ */
+router.patch(
+  "/:id/role",
+  authMiddleware,
+  authorizeRoles("admin"),
+  changeRole
 );
 
 module.exports = router;
