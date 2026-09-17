@@ -12,7 +12,7 @@ const corsOptions = {
     "http://localhost:5173",
     "https://auth-fe-thaisonpham26.vercel.app"
   ],
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   credentials: true,
 };
 
