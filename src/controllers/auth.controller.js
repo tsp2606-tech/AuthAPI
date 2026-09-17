@@ -363,5 +363,6 @@ module.exports = {
   changePassword,
   logout,
   getAdminDashboard,
-  changeRole
+  changeRole,
+  googleLogin,
 };
