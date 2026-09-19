@@ -6,7 +6,7 @@ POST {{authUrl}}/forgot-password
 Content-Type: {{contentType}}
 
 {
-  "email": "binpham@example.com"
+  "email": "binpham260607@gmail.com"
 }
 
 ### Đặt lại mật khẩu: lấy raw token từ email, không phải hash trong MongoDB
