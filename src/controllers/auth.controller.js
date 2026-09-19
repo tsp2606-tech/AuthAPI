@@ -275,10 +275,20 @@ const googleLogin = async (req, res, next) => {
     }
 
     // 1. Xác thực ID Token qua Firebase Admin SDK
+    if (!admin) {
+      console.error("[Firebase Error] Backend chưa được cấu hình FIREBASE_SERVICE_ACCOUNT!");
+      return res.status(500).json({
+        message: "Backend chưa được cấu hình Firebase Service Account trên server (Render)",
+        error: "InternalServerError",
+        statusCode: 500,
+      });
+    }
+
     let decodedToken;
     try {
       decodedToken = await admin.auth().verifyIdToken(idToken);
     } catch (err) {
+      console.error("[Firebase Verify Error]:", err);
       if (err.code === "auth/id-token-expired") {
         return res.status(401).json({
           message: "Firebase ID Token đã hết hạn",
