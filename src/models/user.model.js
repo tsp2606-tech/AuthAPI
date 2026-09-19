@@ -23,6 +23,16 @@ const userSchema = new mongoose.Schema(
       minlength: [6, "Password phải có ít nhất 6 ký tự"],
       select: false,
     },
+    passwordResetToken: {
+      type: String,
+      select: false,
+      default: null,
+    },
+    passwordResetExpires: {
+      type: Date,
+      select: false,
+      default: null,
+    },
     googleId: {
       type: String,
       default: null,

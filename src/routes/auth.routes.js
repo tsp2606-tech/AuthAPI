@@ -9,12 +9,16 @@ const {
   logout,
   getAdminDashboard,
   changeRole,
-  googleLogin
+  googleLogin,
+  forgotPassword,
+  resetPassword,
 } = require("../controllers/auth.controller");
 
 const router = express.Router();
 
 router.post("/google-login", googleLogin);
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password", resetPassword);
 
 /**
  * @swagger

@@ -1,0 +1,19 @@
+@authUrl = http://localhost:3001/api/auth
+@contentType = application/json
+
+### Quên mật khẩu: luôn mong đợi 200 với email hợp lệ/không tồn tại
+POST {{authUrl}}/forgot-password
+Content-Type: {{contentType}}
+
+{
+  "email": "binpham@example.com"
+}
+
+### Đặt lại mật khẩu: lấy raw token từ email, không phải hash trong MongoDB
+POST {{authUrl}}/reset-password
+Content-Type: {{contentType}}
+
+{
+  "token": "PASTE_RAW_TOKEN_FROM_EMAIL",
+  "newPassword": "new-password-123"
+}
