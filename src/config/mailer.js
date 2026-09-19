@@ -1,14 +1,27 @@
 const nodemailer = require("nodemailer");
 
-const mailer = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT || 587),
-  secure: process.env.SMTP_SECURE === "true",
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+// Tự động tối ưu cho Gmail để tránh bị nghẽn STARTTLS trên môi trường cloud (Render)
+const isGmail = process.env.SMTP_HOST === "smtp.gmail.com" || process.env.SMTP_SERVICE === "gmail";
+
+const mailer = nodemailer.createTransport(
+  isGmail
+    ? {
+        service: "gmail",
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      }
+    : {
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: process.env.SMTP_SECURE === "true" || Number(process.env.SMTP_PORT) === 465,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      }
+);
 
 const sendPasswordResetEmail = async ({ email, name, resetUrl }) => {
   await mailer.sendMail({
