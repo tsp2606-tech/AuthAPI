@@ -2,7 +2,7 @@ const bcrypt = require("bcryptjs");
 const User = require("../models/user.model");
 const jwt = require("jsonwebtoken");
 const userService = require("../services/userService");
-const admin = require("../config/firebase");
+const firebaseAuth = require("../config/firebase");
 const removePassword = (user) => {
   const data = user.toObject();
   // Giữ nguyên trường password (đã là hash bcrypt) để trả về
@@ -275,7 +275,7 @@ const googleLogin = async (req, res, next) => {
     }
 
     // 1. Xác thực ID Token qua Firebase Admin SDK
-    if (!admin) {
+    if (!firebaseAuth) {
       console.error("[Firebase Error] Backend chưa được cấu hình FIREBASE_SERVICE_ACCOUNT!");
       return res.status(500).json({
         message: "Backend chưa được cấu hình Firebase Service Account trên server (Render)",
@@ -286,7 +286,7 @@ const googleLogin = async (req, res, next) => {
 
     let decodedToken;
     try {
-      decodedToken = await admin.auth().verifyIdToken(idToken);
+      decodedToken = await firebaseAuth.verifyIdToken(idToken);
     } catch (err) {
       console.error("[Firebase Verify Error]:", err);
       if (err.code === "auth/id-token-expired") {

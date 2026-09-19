@@ -1,6 +1,7 @@
-const admin = require("firebase-admin");
+const { initializeApp, cert, getApps } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
 
-let firebaseAdmin = null;
+let firebaseAuth = null;
 
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
@@ -16,12 +17,14 @@ try {
       serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
     }
 
-    firebaseAdmin = admin.apps.length
-      ? admin.app()
-      : admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount),
+    const app = getApps().length
+      ? getApps()[0]
+      : initializeApp({
+          credential: cert(serviceAccount),
         });
-    console.log("[Firebase Admin] Khởi tạo thành công!");
+
+    firebaseAuth = getAuth(app);
+    console.log("[Firebase Admin] Khởi tạo Firebase Auth thành công!");
   } else {
     console.warn("[Firebase Warning] Thiếu biến môi trường FIREBASE_SERVICE_ACCOUNT.");
   }
@@ -29,4 +32,4 @@ try {
   console.error("[Firebase Error] Không thể khởi tạo Firebase Admin:", error.message);
 }
 
-module.exports = firebaseAdmin;
+module.exports = firebaseAuth;
