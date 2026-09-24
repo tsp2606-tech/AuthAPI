@@ -1,6 +1,7 @@
 const express = require("express");
 const authMiddleware = require("../middleware/auth.middleware");
 const authorizeRoles = require("../middleware/role.middleware");
+const asyncHandler = require("../middleware/asyncHandler");
 const {
   register,
   login,
@@ -9,6 +10,7 @@ const {
   logout,
   getAdminDashboard,
   changeRole,
+  deleteUser,
   googleLogin,
   forgotPassword,
   resetPassword,
@@ -16,9 +18,9 @@ const {
 
 const router = express.Router();
 
-router.post("/google-login", googleLogin);
-router.post("/forgot-password", forgotPassword);
-router.post("/reset-password", resetPassword);
+router.post("/google-login", asyncHandler(googleLogin));
+router.post("/forgot-password", asyncHandler(forgotPassword));
+router.post("/reset-password", asyncHandler(resetPassword));
 
 /**
  * @swagger
@@ -101,7 +103,7 @@ router.post("/reset-password", resetPassword);
  *       409:
  *         description: Email đã tồn tại
  */
-router.post("/register", register);
+router.post("/register", asyncHandler(register));
 
 /**
  * @swagger
@@ -151,7 +153,7 @@ router.post("/register", register);
  *       401:
  *         description: Sai email hoặc mật khẩu
  */
-router.post("/login", login);
+router.post("/login", asyncHandler(login));
 
 /**
  * @swagger
@@ -179,7 +181,7 @@ router.post("/login", login);
  *       404:
  *         description: Không tìm thấy người dùng
  */
-router.get("/me", authMiddleware, getMe);
+router.get("/me", authMiddleware, asyncHandler(getMe));
 
 /**
  * @swagger
@@ -201,7 +203,7 @@ router.get("/me", authMiddleware, getMe);
  *                   type: string
  *                   example: Đăng xuất thành công
  */
-router.post("/logout", logout);
+router.post("/logout", asyncHandler(logout));
 
 /**
  * @swagger
@@ -248,7 +250,7 @@ router.post("/logout", logout);
 router.put(
   "/change-password",
   authMiddleware,
-  changePassword
+  asyncHandler(changePassword)
 );
 
 /**
@@ -295,7 +297,7 @@ router.get(
   "/admin/dashboard",
   authMiddleware,
   authorizeRoles("admin"),
-  getAdminDashboard
+  asyncHandler(getAdminDashboard)
 );
 
 /**
@@ -352,7 +354,41 @@ router.patch(
   "/:id/role",
   authMiddleware,
   authorizeRoles("admin"),
-  changeRole
+  asyncHandler(changeRole)
+);
+
+/**
+ * @swagger
+ * /api/auth/{id}:
+ *   delete:
+ *     summary: Xóa người dùng (Chỉ Admin)
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của người dùng cần xóa
+ *     responses:
+ *       200:
+ *         description: Xóa người dùng thành công
+ *       400:
+ *         description: Không thể tự xóa tài khoản của chính mình
+ *       401:
+ *         description: Token không hợp lệ
+ *       403:
+ *         description: Không có quyền truy cập (không phải admin)
+ *       404:
+ *         description: Không tìm thấy người dùng
+ */
+router.delete(
+  "/:id",
+  authMiddleware,
+  authorizeRoles("admin"),
+  asyncHandler(deleteUser)
 );
 
 module.exports = router;

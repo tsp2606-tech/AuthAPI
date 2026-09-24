@@ -54,8 +54,11 @@ const swaggerOptions = {
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
-
 app.use(express.json());
 app.use("/api/auth", authRoutes);
+
+// Global Error Handler Middleware
+const errorHandler = require("./middleware/error.middleware");
+app.use(errorHandler);
 
 module.exports = app;

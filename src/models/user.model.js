@@ -55,4 +55,22 @@ const userSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+userSchema.set("toJSON", {
+  transform: (doc, ret) => {
+    delete ret.password;
+    delete ret.passwordResetToken;
+    delete ret.passwordResetExpires;
+    return ret;
+  },
+});
+
+userSchema.set("toObject", {
+  transform: (doc, ret) => {
+    delete ret.password;
+    delete ret.passwordResetToken;
+    delete ret.passwordResetExpires;
+    return ret;
+  },
+});
+
 module.exports = mongoose.model("User", userSchema);

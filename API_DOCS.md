@@ -184,3 +184,22 @@
   - `400 Bad Request`: Báo lỗi nếu gửi role không hợp lệ (ngoài `admin` và `user`).
   - `403 Forbidden`: Tài khoản đang thao tác không phải là admin.
   - `404 Not Found`: Không tìm thấy user có ID đó.
+
+---
+
+## 8. Xóa người dùng (Delete User)
+- **Endpoint:** `/:id` (ví dụ: `/6a86f2089f702a12e89b2b09`)
+- **Method:** `DELETE`
+- **Yêu cầu xác thực:** **Có** (và bắt buộc user phải có `role` là `"admin"`)
+- **Responses:**
+  - `200 OK` (Thành công):
+    ```json
+    {
+      "message": "Xóa người dùng thành công"
+    }
+    ```
+  - `400 Bad Request`: Báo lỗi nếu admin cố gắng tự xóa chính tài khoản của mình ("Bạn không thể tự xóa tài khoản của chính mình").
+  - `401 Unauthorized`: Token không hợp lệ hoặc chưa gửi token.
+  - `403 Forbidden`: Tài khoản không có quyền truy cập (không phải admin).
+  - `404 Not Found`: Không tìm thấy user có ID đó.
+

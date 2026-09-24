@@ -1,17 +1,19 @@
-const bcrypt = require("bcryptjs");
-const User = require("../models/user.model");
 const jwt = require("jsonwebtoken");
 const userService = require("../services/userService");
 const firebaseAuth = require("../config/firebase");
 const crypto = require("crypto");
 const { sendPasswordResetEmail } = require("../config/mailer");
+
 const removePassword = (user) => {
-  const data = user.toObject();
-  // Giữ nguyên trường password (đã là hash bcrypt) để trả về
+  if (!user) return user;
+  const data = typeof user.toObject === "function" ? user.toObject() : { ...user };
+  delete data.password;
+  delete data.passwordResetToken;
+  delete data.passwordResetExpires;
   return data;
 };
 
-//ham register
+// Đăng ký
 const register = async (req, res, next) => {
   try {
     const { name, email, password } = req.body;
@@ -20,7 +22,7 @@ const register = async (req, res, next) => {
       return res.status(400).json({
         message: "Name, email và password là bắt buộc",
         error: "BadRequest",
-        statusCode: 400
+        statusCode: 400,
       });
     }
 
@@ -28,41 +30,37 @@ const register = async (req, res, next) => {
       return res.status(400).json({
         message: "Password phải có ít nhất 6 ký tự",
         error: "BadRequest",
-        statusCode: 400
+        statusCode: 400,
       });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const existingUser = await User.findOne({
-      email: normalizedEmail
-    });
+    const existingUser = await userService.findUserByEmail(normalizedEmail);
 
     if (existingUser) {
       return res.status(409).json({
         message: "Email đã được đăng ký",
         error: "Conflict",
-        statusCode: 409
+        statusCode: 409,
       });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = await User.create({
+    const user = await userService.createUser({
       name: name.trim(),
       email: normalizedEmail,
-      password: hashedPassword
+      password,
     });
 
     return res.status(201).json({
       message: "Đăng ký thành công",
-      user: removePassword(user)
+      user: removePassword(user),
     });
   } catch (error) {
     next(error);
   }
 };
 
-//ham login
+// Đăng nhập
 const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
@@ -71,81 +69,76 @@ const login = async (req, res, next) => {
       return res.status(400).json({
         message: "Email và password là bắt buộc",
         error: "BadRequest",
-        statusCode: 400
+        statusCode: 400,
       });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const user = await User.findOne({
-      email: normalizedEmail
-    }).select("+password");
+    const user = await userService.findUserByEmail(normalizedEmail, true);
 
     if (!user) {
       return res.status(401).json({
         message: "Email hoặc mật khẩu không đúng",
         error: "Unauthorized",
-        statusCode: 401
+        statusCode: 401,
       });
     }
 
-    const isPasswordValid = await bcrypt.compare(
-      password,
-      user.password
-    );
+    const isPasswordValid = await userService.checkPassword(password, user.password);
 
     if (!isPasswordValid) {
       return res.status(401).json({
         message: "Email hoặc mật khẩu không đúng",
         error: "Unauthorized",
-        statusCode: 401
+        statusCode: 401,
       });
     }
 
     const token = jwt.sign(
       {
         userId: user._id.toString(),
-        role: user.role
+        role: user.role,
       },
       process.env.JWT_SECRET,
       {
-        expiresIn: "1d"
-      }
+        expiresIn: "1d",
+      },
     );
 
     return res.status(200).json({
       message: "Đăng nhập thành công",
       user: removePassword(user),
       token,
-      expiresIn: "1d"
+      expiresIn: "1d",
     });
   } catch (error) {
     next(error);
   }
 };
 
-//get me
+// Lấy thông tin tài khoản hiện tại (Get Me)
 const getMe = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.userId).select("+password");
+    const user = await userService.findUserById(req.user.userId);
 
     if (!user) {
       return res.status(404).json({
         message: "Không tìm thấy người dùng",
         error: "NotFound",
-        statusCode: 404
+        statusCode: 404,
       });
     }
 
     return res.status(200).json({
       message: "Lấy thông tin thành công",
-      user: removePassword(user)
+      user: removePassword(user),
     });
   } catch (error) {
     next(error);
   }
 };
 
-//ham change password
+// Đổi mật khẩu
 const changePassword = async (req, res, next) => {
   try {
     const { oldPassword, newPassword } = req.body;
@@ -154,7 +147,7 @@ const changePassword = async (req, res, next) => {
       return res.status(400).json({
         message: "oldPassword và newPassword là bắt buộc",
         error: "BadRequest",
-        statusCode: 400
+        statusCode: 400,
       });
     }
 
@@ -162,66 +155,71 @@ const changePassword = async (req, res, next) => {
       return res.status(400).json({
         message: "Password mới phải có ít nhất 6 ký tự",
         error: "BadRequest",
-        statusCode: 400
+        statusCode: 400,
       });
     }
 
-    const user = await User.findById(req.user.userId)
-      .select("+password");
+    const user = await userService.findUserById(req.user.userId, true);
 
     if (!user) {
       return res.status(404).json({
         message: "Không tìm thấy người dùng",
         error: "NotFound",
-        statusCode: 404
+        statusCode: 404,
       });
     }
 
-    const isOldPasswordValid = await bcrypt.compare(
-      oldPassword,
-      user.password
-    );
+    // Tài khoản Google không có mật khẩu truyền thống
+    if (user.authType === "google" || !user.password) {
+      return res.status(400).json({
+        message: "Tài khoản đăng nhập bằng Google không thể đổi mật khẩu theo cách này",
+        error: "BadRequest",
+        statusCode: 400,
+      });
+    }
+
+    const isOldPasswordValid = await userService.checkPassword(oldPassword, user.password);
 
     if (!isOldPasswordValid) {
       return res.status(401).json({
         message: "Mật khẩu hiện tại không đúng",
         error: "Unauthorized",
-        statusCode: 401
+        statusCode: 401,
       });
     }
 
-    user.password = await bcrypt.hash(newPassword, 10);
-    await user.save();
+    await userService.updateUserPassword(user, newPassword);
 
     return res.status(200).json({
-      message: "Đổi mật khẩu thành công"
+      message: "Đổi mật khẩu thành công",
     });
   } catch (error) {
     next(error);
   }
 };
 
-//ham logout
+// Đăng xuất
 const logout = async (req, res) => {
   return res.status(200).json({
-    message: "Đăng xuất thành công"
+    message: "Đăng xuất thành công",
   });
 };
 
-//ham admin dashboard
+// Lấy thông tin Admin Dashboard
 const getAdminDashboard = async (req, res, next) => {
   try {
     const data = await userService.getAllUsersAndStats();
     return res.status(200).json({
       message: "Dữ liệu Admin Dashboard",
-      ...data
+      stats: data.stats,
+      users: data.users.map((u) => removePassword(u)),
     });
   } catch (error) {
     next(error);
   }
 };
 
-//ham doi role
+// Đổi vai trò (Role)
 const changeRole = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -231,7 +229,7 @@ const changeRole = async (req, res, next) => {
       return res.status(400).json({
         message: "Role không hợp lệ (chỉ nhận 'admin' hoặc 'user')",
         error: "BadRequest",
-        statusCode: 400
+        statusCode: 400,
       });
     }
 
@@ -240,7 +238,7 @@ const changeRole = async (req, res, next) => {
       return res.status(404).json({
         message: "Không tìm thấy người dùng",
         error: "NotFound",
-        statusCode: 404
+        statusCode: 404,
       });
     }
 
@@ -248,7 +246,7 @@ const changeRole = async (req, res, next) => {
       return res.status(400).json({
         message: `Người dùng này đã là ${role}`,
         error: "BadRequest",
-        statusCode: 400
+        statusCode: 400,
       });
     }
 
@@ -256,14 +254,47 @@ const changeRole = async (req, res, next) => {
 
     return res.status(200).json({
       message: "Đổi quyền thành công",
-      user: removePassword(updatedUser)
+      user: removePassword(updatedUser),
     });
   } catch (error) {
     next(error);
   }
 };
 
-//login google
+// Xóa người dùng (Chỉ Admin)
+const deleteUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Không cho phép admin tự xóa chính tài khoản đang đăng nhập
+    if (req.user && (req.user.userId === id || req.user._id === id)) {
+      return res.status(400).json({
+        message: "Bạn không thể tự xóa tài khoản của chính mình",
+        error: "BadRequest",
+        statusCode: 400,
+      });
+    }
+
+    const user = await userService.findUserById(id);
+    if (!user) {
+      return res.status(404).json({
+        message: "Không tìm thấy người dùng",
+        error: "NotFound",
+        statusCode: 404,
+      });
+    }
+
+    await userService.deleteUserById(id);
+
+    return res.status(200).json({
+      message: "Xóa người dùng thành công",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Đăng nhập qua Google
 const googleLogin = async (req, res, next) => {
   try {
     const { idToken } = req.body;
@@ -276,7 +307,6 @@ const googleLogin = async (req, res, next) => {
       });
     }
 
-    // 1. Xác thực ID Token qua Firebase Admin SDK
     if (!firebaseAuth) {
       console.error("[Firebase Error] Backend chưa được cấu hình FIREBASE_SERVICE_ACCOUNT!");
       return res.status(500).json({
@@ -315,38 +345,13 @@ const googleLogin = async (req, res, next) => {
       });
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const user = await userService.findOrCreateGoogleUser({
+      uid,
+      email,
+      name,
+      picture,
+    });
 
-    // 2. Tìm User trong Database
-    let user = await User.findOne({ email: normalizedEmail });
-
-    if (user) {
-      // Nếu đã có tài khoản: cập nhật thêm googleId/avatar nếu trước đó đăng ký local
-      let updated = false;
-      if (!user.googleId) {
-        user.googleId = uid;
-        updated = true;
-      }
-      if (picture && user.avatar === "default.jpg") {
-        user.avatar = picture;
-        updated = true;
-      }
-      if (updated) {
-        await user.save();
-      }
-    } else {
-      // 3. Nếu chưa có tài khoản: tạo User mới với authType = 'google'
-      user = await User.create({
-        name: name || normalizedEmail.split("@")[0],
-        email: normalizedEmail,
-        googleId: uid,
-        avatar: picture || "default.jpg",
-        authType: "google",
-        role: "user",
-      });
-    }
-
-    // 4. Ký JWT của hệ thống (dùng chung quy ước với login thường)
     const expiresIn = process.env.JWT_EXPIRES_IN || "1d";
     const token = jwt.sign(
       {
@@ -368,6 +373,7 @@ const googleLogin = async (req, res, next) => {
   }
 };
 
+// Quên mật khẩu
 const forgotPassword = async (req, res, next) => {
   try {
     const { email } = req.body;
@@ -381,7 +387,7 @@ const forgotPassword = async (req, res, next) => {
       });
     }
 
-    const user = await User.findOne({ email: email.trim().toLowerCase() });
+    const user = await userService.findUserByEmail(email);
 
     // Không tiết lộ email có tồn tại hay không.
     if (!user || user.authType === "google") {
@@ -394,10 +400,9 @@ const forgotPassword = async (req, res, next) => {
       .update(rawToken)
       .digest("hex");
     const ttlMinutes = Number(process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES || 15);
+    const passwordResetExpires = new Date(Date.now() + ttlMinutes * 60 * 1000);
 
-    user.passwordResetToken = passwordResetToken;
-    user.passwordResetExpires = new Date(Date.now() + ttlMinutes * 60 * 1000);
-    await user.save({ validateBeforeSave: false });
+    await userService.setPasswordResetToken(user, passwordResetToken, passwordResetExpires);
 
     const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${rawToken}`;
 
@@ -408,9 +413,7 @@ const forgotPassword = async (req, res, next) => {
         resetUrl,
       });
     } catch (error) {
-      user.passwordResetToken = null;
-      user.passwordResetExpires = null;
-      await user.save({ validateBeforeSave: false });
+      await userService.clearPasswordResetToken(user);
       return next(error);
     }
 
@@ -420,6 +423,7 @@ const forgotPassword = async (req, res, next) => {
   }
 };
 
+// Đặt lại mật khẩu
 const resetPassword = async (req, res, next) => {
   try {
     const { token, newPassword } = req.body;
@@ -444,10 +448,7 @@ const resetPassword = async (req, res, next) => {
       .createHash("sha256")
       .update(token)
       .digest("hex");
-    const user = await User.findOne({
-      passwordResetToken,
-      passwordResetExpires: { $gt: new Date() },
-    }).select("+passwordResetToken +passwordResetExpires");
+    const user = await userService.findUserByResetToken(passwordResetToken);
 
     if (!user) {
       return res.status(400).json({
@@ -457,10 +458,7 @@ const resetPassword = async (req, res, next) => {
       });
     }
 
-    user.password = await bcrypt.hash(newPassword, 10);
-    user.passwordResetToken = null;
-    user.passwordResetExpires = null;
-    await user.save();
+    await userService.resetPasswordWithHash(user, newPassword);
 
     return res.status(200).json({ message: "Đặt lại mật khẩu thành công" });
   } catch (error) {
@@ -479,4 +477,5 @@ module.exports = {
   logout,
   getAdminDashboard,
   changeRole,
+  deleteUser,
 };
