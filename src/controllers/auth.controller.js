@@ -1,8 +1,16 @@
-const jwt = require("jsonwebtoken");
+const { signToken } = require("../config/jwt.config");
 const userService = require("../services/userService");
 const firebaseAuth = require("../config/firebase");
 const crypto = require("crypto");
 const { sendPasswordResetEmail } = require("../config/mailer");
+
+const getCookieOptions = () => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  maxAge: 24 * 60 * 60 * 1000,
+  path: "/",
+});
 
 const removePassword = (user) => {
   if (!user) return user;
@@ -18,9 +26,25 @@ const register = async (req, res, next) => {
   try {
     const { name, email, password } = req.body;
 
-    if (!name || !email || !password) {
+    if (
+      !name ||
+      !email ||
+      !password ||
+      typeof name !== "string" ||
+      typeof email !== "string" ||
+      typeof password !== "string"
+    ) {
       return res.status(400).json({
-        message: "Name, email và password là bắt buộc",
+        message: "Name, email và password là bắt buộc và phải là chuỗi ký tự",
+        error: "BadRequest",
+        statusCode: 400,
+      });
+    }
+
+    const emailRegex = /^[^\s@]+@[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*\.com$/i;
+    if (!emailRegex.test(email.trim())) {
+      return res.status(400).json({
+        message: "Email không đúng định dạng (phải có đuôi @*.com)",
         error: "BadRequest",
         statusCode: 400,
       });
@@ -65,7 +89,12 @@ const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
+    if (
+      !email ||
+      !password ||
+      typeof email !== "string" ||
+      typeof password !== "string"
+    ) {
       return res.status(400).json({
         message: "Email và password là bắt buộc",
         error: "BadRequest",
@@ -94,22 +123,19 @@ const login = async (req, res, next) => {
       });
     }
 
-    const token = jwt.sign(
-      {
-        userId: user._id.toString(),
-        role: user.role,
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "1d",
-      },
-    );
+    const token = signToken({
+      userId: user._id.toString(),
+      role: user.role,
+      tokenVersion: user.tokenVersion || 0,
+    });
+
+    res.cookie("token", token, getCookieOptions());
 
     return res.status(200).json({
       message: "Đăng nhập thành công",
       user: removePassword(user),
       token,
-      expiresIn: "1d",
+      expiresIn: process.env.JWT_EXPIRES_IN || "1d",
     });
   } catch (error) {
     next(error);
@@ -143,9 +169,22 @@ const changePassword = async (req, res, next) => {
   try {
     const { oldPassword, newPassword } = req.body;
 
-    if (!oldPassword || !newPassword) {
+    if (
+      !oldPassword ||
+      !newPassword ||
+      typeof oldPassword !== "string" ||
+      typeof newPassword !== "string"
+    ) {
       return res.status(400).json({
-        message: "oldPassword và newPassword là bắt buộc",
+        message: "oldPassword và newPassword là bắt buộc và phải là chuỗi ký tự",
+        error: "BadRequest",
+        statusCode: 400,
+      });
+    }
+
+    if (oldPassword === newPassword) {
+      return res.status(400).json({
+        message: "Mật khẩu mới và mật khẩu cũ không được trùng nhau",
         error: "BadRequest",
         statusCode: 400,
       });
@@ -169,8 +208,8 @@ const changePassword = async (req, res, next) => {
       });
     }
 
-    // Tài khoản Google không có mật khẩu truyền thống
-    if (user.authType === "google" || !user.password) {
+    // Tài khoản không có mật khẩu (chỉ đăng nhập bằng Google OAuth)
+    if (!user.password) {
       return res.status(400).json({
         message: "Tài khoản đăng nhập bằng Google không thể đổi mật khẩu theo cách này",
         error: "BadRequest",
@@ -188,10 +227,29 @@ const changePassword = async (req, res, next) => {
       });
     }
 
+    const isSameAsCurrentPassword = await userService.checkPassword(newPassword, user.password);
+    if (isSameAsCurrentPassword) {
+      return res.status(400).json({
+        message: "Mật khẩu mới và mật khẩu cũ không được trùng nhau",
+        error: "BadRequest",
+        statusCode: 400,
+      });
+    }
+
     await userService.updateUserPassword(user, newPassword);
+
+    // Cấp token mới với tokenVersion đã được tăng
+    const freshToken = signToken({
+      userId: user._id.toString(),
+      role: user.role,
+      tokenVersion: user.tokenVersion,
+    });
+
+    res.cookie("token", freshToken, getCookieOptions());
 
     return res.status(200).json({
       message: "Đổi mật khẩu thành công",
+      token: freshToken,
     });
   } catch (error) {
     next(error);
@@ -199,10 +257,23 @@ const changePassword = async (req, res, next) => {
 };
 
 // Đăng xuất
-const logout = async (req, res) => {
-  return res.status(200).json({
-    message: "Đăng xuất thành công",
-  });
+const logout = async (req, res, next) => {
+  try {
+    if (req.user && req.user.userId) {
+      await userService.revokeUserTokens(req.user.userId);
+    }
+
+    res.clearCookie("token", {
+      ...getCookieOptions(),
+      maxAge: 0,
+    });
+
+    return res.status(200).json({
+      message: "Đăng xuất thành công",
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 // Lấy thông tin Admin Dashboard
@@ -225,9 +296,18 @@ const changeRole = async (req, res, next) => {
     const { id } = req.params;
     const { role } = req.body;
 
-    if (!role || !["admin", "user"].includes(role)) {
+    if (!role || typeof role !== "string" || !["admin", "user"].includes(role)) {
       return res.status(400).json({
         message: "Role không hợp lệ (chỉ nhận 'admin' hoặc 'user')",
+        error: "BadRequest",
+        statusCode: 400,
+      });
+    }
+
+    // Không cho phép admin tự hạ quyền của chính mình
+    if (req.user && (req.user.userId === id || req.user._id === id) && role !== "admin") {
+      return res.status(400).json({
+        message: "Bạn không thể tự hạ quyền quản trị của chính mình",
         error: "BadRequest",
         statusCode: 400,
       });
@@ -299,9 +379,9 @@ const googleLogin = async (req, res, next) => {
   try {
     const { idToken } = req.body;
 
-    if (!idToken) {
+    if (!idToken || typeof idToken !== "string") {
       return res.status(400).json({
-        message: "idToken là bắt buộc",
+        message: "idToken là bắt buộc và phải là chuỗi ký tự",
         error: "BadRequest",
         statusCode: 400,
       });
@@ -320,7 +400,7 @@ const googleLogin = async (req, res, next) => {
     try {
       decodedToken = await firebaseAuth.verifyIdToken(idToken);
     } catch (err) {
-      console.error("[Firebase Verify Error]:", err);
+      console.error("[Firebase Verify Error]:", err.code || "Verification failed");
       if (err.code === "auth/id-token-expired") {
         return res.status(401).json({
           message: "Firebase ID Token đã hết hạn",
@@ -352,21 +432,19 @@ const googleLogin = async (req, res, next) => {
       picture,
     });
 
-    const expiresIn = process.env.JWT_EXPIRES_IN || "1d";
-    const token = jwt.sign(
-      {
-        userId: user._id.toString(),
-        role: user.role,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn },
-    );
+    const token = signToken({
+      userId: user._id.toString(),
+      role: user.role,
+      tokenVersion: user.tokenVersion || 0,
+    });
+
+    res.cookie("token", token, getCookieOptions());
 
     return res.status(200).json({
       message: "Đăng nhập Google thành công",
       user: removePassword(user),
       token,
-      expiresIn,
+      expiresIn: process.env.JWT_EXPIRES_IN || "1d",
     });
   } catch (error) {
     next(error);
@@ -379,15 +457,25 @@ const forgotPassword = async (req, res, next) => {
     const { email } = req.body;
     const message = "Nếu email tồn tại, hướng dẫn đặt lại mật khẩu đã được gửi";
 
-    if (!email) {
+    if (!email || typeof email !== "string") {
       return res.status(400).json({
-        message: "Email là bắt buộc",
+        message: "Email là bắt buộc và phải là chuỗi ký tự",
         error: "BadRequest",
         statusCode: 400,
       });
     }
 
-    const user = await userService.findUserByEmail(email);
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return res.status(400).json({
+        message: "Email không đúng định dạng",
+        error: "BadRequest",
+        statusCode: 400,
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await userService.findUserByEmail(normalizedEmail);
 
     // Không tiết lộ email có tồn tại hay không.
     if (!user || user.authType === "google") {
@@ -404,7 +492,8 @@ const forgotPassword = async (req, res, next) => {
 
     await userService.setPasswordResetToken(user, passwordResetToken, passwordResetExpires);
 
-    const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${rawToken}`;
+    const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+    const resetUrl = `${clientUrl}/reset-password?token=${rawToken}`;
 
     try {
       await sendPasswordResetEmail({
@@ -428,9 +517,14 @@ const resetPassword = async (req, res, next) => {
   try {
     const { token, newPassword } = req.body;
 
-    if (!token || !newPassword) {
+    if (
+      !token ||
+      !newPassword ||
+      typeof token !== "string" ||
+      typeof newPassword !== "string"
+    ) {
       return res.status(400).json({
-        message: "token và newPassword là bắt buộc",
+        message: "token và newPassword là bắt buộc và phải là chuỗi ký tự",
         error: "BadRequest",
         statusCode: 400,
       });
@@ -459,6 +553,11 @@ const resetPassword = async (req, res, next) => {
     }
 
     await userService.resetPasswordWithHash(user, newPassword);
+
+    res.clearCookie("token", {
+      ...getCookieOptions(),
+      maxAge: 0,
+    });
 
     return res.status(200).json({ message: "Đặt lại mật khẩu thành công" });
   } catch (error) {

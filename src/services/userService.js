@@ -1,7 +1,11 @@
+const mongoose = require("mongoose");
 const User = require("../models/user.model");
 const bcrypt = require("bcryptjs");
 
 const findUserByEmail = async (email, selectPassword = false) => {
+  if (!email || typeof email !== "string") {
+    return null;
+  }
   const query = User.findOne({ email: email.trim().toLowerCase() });
   if (selectPassword) {
     query.select("+password");
@@ -10,6 +14,9 @@ const findUserByEmail = async (email, selectPassword = false) => {
 };
 
 const findUserById = async (userId, selectPassword = false) => {
+  if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+    return null;
+  }
   const query = User.findById(userId);
   if (selectPassword) {
     query.select("+password");
@@ -29,6 +36,7 @@ const createUser = async ({ name, email, password }) => {
 
 const updateUserPassword = async (user, newPassword) => {
   user.password = await bcrypt.hash(newPassword, 10);
+  user.tokenVersion = (user.tokenVersion || 0) + 1;
   await user.save();
   return user;
 };
@@ -57,6 +65,9 @@ const getAllUsersAndStats = async () => {
 };
 
 const changeUserRole = async (userId, newRole) => {
+  if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+    return null;
+  }
   const user = await User.findById(userId);
   if (!user) {
     return null; // Không tìm thấy
@@ -67,6 +78,9 @@ const changeUserRole = async (userId, newRole) => {
 };
 
 const deleteUserById = async (userId) => {
+  if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+    return null;
+  }
   return await User.findByIdAndDelete(userId);
 };
 
@@ -80,8 +94,12 @@ const findOrCreateGoogleUser = async ({ uid, email, name, picture }) => {
       user.googleId = uid;
       updated = true;
     }
-    if (picture && user.avatar === "default.jpg") {
+    if (picture && user.avatar !== picture) {
       user.avatar = picture;
+      updated = true;
+    }
+    if (user.authType !== "google") {
+      user.authType = "google";
       updated = true;
     }
     if (updated) {
@@ -126,8 +144,20 @@ const resetPasswordWithHash = async (user, newPassword) => {
   user.password = await bcrypt.hash(newPassword, 10);
   user.passwordResetToken = null;
   user.passwordResetExpires = null;
+  user.tokenVersion = (user.tokenVersion || 0) + 1;
   await user.save();
   return user;
+};
+
+const revokeUserTokens = async (userId) => {
+  if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+    return null;
+  }
+  return await User.findByIdAndUpdate(
+    userId,
+    { $inc: { tokenVersion: 1 } },
+    { returnDocument: "after" }
+  );
 };
 
 module.exports = {
@@ -144,4 +174,5 @@ module.exports = {
   clearPasswordResetToken,
   findUserByResetToken,
   resetPasswordWithHash,
+  revokeUserTokens,
 };

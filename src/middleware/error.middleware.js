@@ -1,5 +1,16 @@
 const errorHandler = (err, req, res, next) => {
-  console.error("[Error Handler]", err);
+  if (process.env.NODE_ENV !== "test") {
+    console.error("[Error Handler]", err.message || err);
+  }
+
+  // CORS policy rejection error
+  if (err.message && err.message.includes("CORS policy")) {
+    return res.status(403).json({
+      message: err.message,
+      error: "Forbidden",
+      statusCode: 403,
+    });
+  }
 
   // Mongoose duplicate key error (E11000)
   if (err.code === 11000) {

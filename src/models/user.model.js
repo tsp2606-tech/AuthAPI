@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       trim: true,
+      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Email không hợp lệ"],
     },
     password: {
       type: String,
@@ -51,11 +52,35 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin"],
       default: "user",
     },
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true },
 );
 
+// Virtual field: initials (2 ký tự in hoa)
+userSchema.virtual("initials").get(function () {
+  const source = (this.name && this.name.trim()) || (this.email && this.email.split("@")[0].trim()) || "US";
+  const clean = source.replace(/^[^\p{L}\p{N}]+/u, "");
+  const words = clean.split(/[\s\-_.]+/).filter(Boolean);
+
+  if (words.length >= 2) {
+    const first = Array.from(words[0])[0] || "";
+    const second = Array.from(words[1])[0] || "";
+    return (first + second).toUpperCase();
+  }
+
+  const chars = Array.from(clean);
+  if (chars.length >= 2) {
+    return (chars[0] + chars[1]).toUpperCase();
+  }
+  return (chars[0] || "U").toUpperCase();
+});
+
 userSchema.set("toJSON", {
+  virtuals: true,
   transform: (doc, ret) => {
     delete ret.password;
     delete ret.passwordResetToken;
@@ -65,6 +90,7 @@ userSchema.set("toJSON", {
 });
 
 userSchema.set("toObject", {
+  virtuals: true,
   transform: (doc, ret) => {
     delete ret.password;
     delete ret.passwordResetToken;

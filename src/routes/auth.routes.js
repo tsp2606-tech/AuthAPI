@@ -15,12 +15,19 @@ const {
   forgotPassword,
   resetPassword,
 } = require("../controllers/auth.controller");
+const {
+  loginLimiter,
+  registerLimiter,
+  forgotPasswordLimiter,
+  resetPasswordLimiter,
+  googleLoginLimiter,
+} = require("../middleware/rateLimiter");
 
 const router = express.Router();
 
-router.post("/google-login", asyncHandler(googleLogin));
-router.post("/forgot-password", asyncHandler(forgotPassword));
-router.post("/reset-password", asyncHandler(resetPassword));
+router.post("/google-login", googleLoginLimiter, asyncHandler(googleLogin));
+router.post("/forgot-password", forgotPasswordLimiter, asyncHandler(forgotPassword));
+router.post("/reset-password", resetPasswordLimiter, asyncHandler(resetPassword));
 
 /**
  * @swagger
@@ -103,7 +110,7 @@ router.post("/reset-password", asyncHandler(resetPassword));
  *       409:
  *         description: Email đã tồn tại
  */
-router.post("/register", asyncHandler(register));
+router.post("/register", registerLimiter, asyncHandler(register));
 
 /**
  * @swagger
@@ -153,7 +160,7 @@ router.post("/register", asyncHandler(register));
  *       401:
  *         description: Sai email hoặc mật khẩu
  */
-router.post("/login", asyncHandler(login));
+router.post("/login", loginLimiter, asyncHandler(login));
 
 /**
  * @swagger
@@ -203,7 +210,7 @@ router.get("/me", authMiddleware, asyncHandler(getMe));
  *                   type: string
  *                   example: Đăng xuất thành công
  */
-router.post("/logout", asyncHandler(logout));
+router.post("/logout", authMiddleware, asyncHandler(logout));
 
 /**
  * @swagger
