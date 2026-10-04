@@ -397,6 +397,14 @@ describe("AuthAPI Comprehensive Security & Quality Test Suite", () => {
 
       expect(res.status).not.toBe(403);
     });
+
+    it("should allow request from render origin (Swagger UI on Render)", async () => {
+      const res = await request(app)
+        .get("/api-docs")
+        .set("Origin", "https://authapi-oimn.onrender.com");
+
+      expect(res.status).not.toBe(403);
+    });
   });
 
   // ========================================================

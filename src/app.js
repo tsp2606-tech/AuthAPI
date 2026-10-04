@@ -25,17 +25,29 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
   "https://auth-fe-thaisonpham26.vercel.app",
+  "https://authapi-oimn.onrender.com",
 ];
 
 if (process.env.CLIENT_URL && !allowedOrigins.includes(process.env.CLIENT_URL)) {
   allowedOrigins.push(process.env.CLIENT_URL);
 }
+if (process.env.RENDER_EXTERNAL_URL && !allowedOrigins.includes(process.env.RENDER_EXTERNAL_URL)) {
+  allowedOrigins.push(process.env.RENDER_EXTERNAL_URL);
+}
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  if (allowedOrigins.includes(origin)) return true;
+  if (/^https:\/\/[a-zA-Z0-9-]+\.onrender\.com$/i.test(origin)) return true;
+  if (/^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/i.test(origin)) return true;
+  if (/^https?:\/\/localhost(:\d+)?$/i.test(origin)) return true;
+  return false;
+};
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Cho phép requests không có origin (server-to-server, curl, Postman)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
+    // Cho phép requests không có origin (server-to-server, curl, Postman) hoặc origin hợp lệ
+    if (isAllowedOrigin(origin)) {
       return callback(null, true);
     }
     const corsError = new Error("CORS policy: Origin not allowed");
@@ -56,9 +68,9 @@ app.use((req, res, next) => {
     if (req.cookies && req.cookies.token) {
       const customHeader = req.headers["x-requested-with"];
       const origin = req.headers.origin;
-      const isAllowedOrigin = origin && allowedOrigins.includes(origin);
+      const isAllowed = isAllowedOrigin(origin);
 
-      if (customHeader !== "XMLHttpRequest" && !isAllowedOrigin) {
+      if (customHeader !== "XMLHttpRequest" && !isAllowed) {
         return res.status(403).json({
           message: "Yêu cầu bị từ chối do bảo vệ CSRF",
           error: "Forbidden",
