@@ -25,10 +25,6 @@ const {
 
 const router = express.Router();
 
-router.post("/google-login", googleLoginLimiter, asyncHandler(googleLogin));
-router.post("/forgot-password", forgotPasswordLimiter, asyncHandler(forgotPassword));
-router.post("/reset-password", resetPasswordLimiter, asyncHandler(resetPassword));
-
 /**
  * @swagger
  * components:
@@ -164,6 +160,59 @@ router.post("/login", loginLimiter, asyncHandler(login));
 
 /**
  * @swagger
+ * /api/auth/google-login:
+ *   post:
+ *     summary: Đăng nhập bằng tài khoản Google (Firebase OAuth)
+ *     description: Xác thực Firebase ID Token từ Google Sign-In và trả về JWT token của hệ thống AuthAPI.
+ *     tags: [Auth]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - idToken
+ *             properties:
+ *               idToken:
+ *                 type: string
+ *                 description: Firebase ID Token nhận được sau khi đăng nhập Google thành công ở client
+ *                 example: eyJhbGciOiJSUzI1NiIsImtpZCI6IjEyM...
+ *     responses:
+ *       200:
+ *         description: Đăng nhập Google thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Đăng nhập Google thành công
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *                 token:
+ *                   type: string
+ *                   example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *                 expiresIn:
+ *                   type: string
+ *                   example: 1d
+ *       400:
+ *         description: Thiếu idToken hoặc tài khoản Google không cung cấp email hợp lệ
+ *       401:
+ *         description: Token Google không hợp lệ hoặc đã hết hạn
+ *       429:
+ *         description: Quá nhiều yêu cầu, vui lòng thử lại sau
+ */
+router.post(
+  "/google-login",
+  googleLoginLimiter,
+  asyncHandler(googleLogin)
+);
+
+/**
+ * @swagger
  * /api/auth/me:
  *   get:
  *     summary: Lấy thông tin người dùng hiện tại
@@ -216,7 +265,8 @@ router.post("/logout", authMiddleware, asyncHandler(logout));
  * @swagger
  * /api/auth/change-password:
  *   put:
- *     summary: Thay đổi mật khẩu người dùng
+ *     summary: Đổi mật khẩu người dùng (Change Password)
+ *     description: Đổi mật khẩu cho tài khoản người dùng hiện tại (yêu cầu Authorization Bearer token). Sau khi đổi mật khẩu thành công, tokenVersion tăng để hủy token cũ và cấp token mới.
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
@@ -232,10 +282,12 @@ router.post("/logout", authMiddleware, asyncHandler(logout));
  *             properties:
  *               oldPassword:
  *                 type: string
+ *                 description: Mật khẩu hiện tại của người dùng
  *                 example: dobiet123
  *               newPassword:
  *                 type: string
- *                 example: hongbietnua
+ *                 description: Mật khẩu mới (tối thiểu 6 ký tự và không được trùng mật khẩu cũ)
+ *                 example: hongbietnua123
  *     responses:
  *       200:
  *         description: Đổi mật khẩu thành công
@@ -247,10 +299,14 @@ router.post("/logout", authMiddleware, asyncHandler(logout));
  *                 message:
  *                   type: string
  *                   example: Đổi mật khẩu thành công
+ *                 token:
+ *                   type: string
+ *                   description: JWT token mới cấp lại
+ *                   example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
  *       400:
- *         description: Thiếu thông tin hoặc password mới quá ngắn
+ *         description: Thiếu thông tin, password mới < 6 ký tự, mật khẩu mới trùng mật khẩu cũ, hoặc tài khoản Google không có mật khẩu
  *       401:
- *         description: Sai mật khẩu cũ hoặc token không hợp lệ
+ *         description: Sai mật khẩu hiện tại hoặc token không hợp lệ / đã hết hạn
  *       404:
  *         description: Không tìm thấy người dùng
  */
@@ -258,6 +314,98 @@ router.put(
   "/change-password",
   authMiddleware,
   asyncHandler(changePassword)
+);
+
+/**
+ * @swagger
+ * /api/auth/forgot-password:
+ *   post:
+ *     summary: Quên mật khẩu - Gửi email hướng dẫn đặt lại mật khẩu
+ *     description: Gửi email chứa liên kết và token đặt lại mật khẩu nếu email tồn tại trong hệ thống. Áp dụng giới hạn tần suất 3 requests / 15 phút.
+ *     tags: [Auth]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Email của tài khoản cần đổi/đặt lại mật khẩu
+ *                 example: user@example.com
+ *     responses:
+ *       200:
+ *         description: Yêu cầu đặt lại mật khẩu đã được tiếp nhận
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Nếu email tồn tại, hướng dẫn đặt lại mật khẩu đã được gửi
+ *       400:
+ *         description: Email không hợp lệ hoặc thiếu thông tin
+ *       429:
+ *         description: Quá nhiều yêu cầu, vui lòng thử lại sau
+ */
+router.post(
+  "/forgot-password",
+  forgotPasswordLimiter,
+  asyncHandler(forgotPassword)
+);
+
+/**
+ * @swagger
+ * /api/auth/reset-password:
+ *   post:
+ *     summary: Đặt lại mật khẩu (Đổi pass qua token từ email)
+ *     description: Xác thực token đặt lại mật khẩu nhận từ email và cập nhật mật khẩu mới. Token reset bị xóa (dùng 1 lần) và các phiên đăng nhập cũ bị thu hồi.
+ *     tags: [Auth]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *               - newPassword
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 description: Token ngẫu nhiên nhận được từ email
+ *                 example: a1b2c3d4e5f67890abcdef1234567890
+ *               newPassword:
+ *                 type: string
+ *                 description: Mật khẩu mới (tối thiểu 6 ký tự)
+ *                 example: newPassword456!
+ *     responses:
+ *       200:
+ *         description: Đặt lại mật khẩu thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Đặt lại mật khẩu thành công
+ *       400:
+ *         description: Token không hợp lệ, đã hết hạn hoặc mật khẩu mới < 6 ký tự
+ *       429:
+ *         description: Quá nhiều yêu cầu, vui lòng thử lại sau
+ */
+router.post(
+  "/reset-password",
+  resetPasswordLimiter,
+  asyncHandler(resetPassword)
 );
 
 /**
