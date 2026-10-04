@@ -478,7 +478,7 @@ const forgotPassword = async (req, res, next) => {
     const user = await userService.findUserByEmail(normalizedEmail);
 
     // Không tiết lộ email có tồn tại hay không.
-    if (!user || user.authType === "google") {
+    if (!user) {
       return res.status(200).json({ message });
     }
 

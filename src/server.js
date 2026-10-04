@@ -5,4 +5,4 @@ const app = require("./app.js");
 connectDB();
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`🚀 Server: http://localhost:${PORT}` ));
+app.listen(PORT, () => console.log(`🚀 Server: http://localhost:${PORT}`));
