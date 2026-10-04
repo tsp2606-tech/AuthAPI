@@ -1,4 +1,10 @@
+const dns = require("node:dns");
 const nodemailer = require("nodemailer");
+
+// Ưu tiên IPv4 để tránh nghẽn/lỗi ENETUNREACH IPv6 trên Windows và mạng nội bộ
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder("ipv4first");
+}
 
 // Tự động tối ưu cho Gmail để tránh bị nghẽn STARTTLS trên môi trường cloud (Render)
 const isGmail = process.env.SMTP_HOST === "smtp.gmail.com" || process.env.SMTP_SERVICE === "gmail";
@@ -11,6 +17,9 @@ const mailer = nodemailer.createTransport(
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS,
         },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
       }
     : {
         host: process.env.SMTP_HOST,
@@ -20,6 +29,9 @@ const mailer = nodemailer.createTransport(
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS,
         },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
       }
 );
 
