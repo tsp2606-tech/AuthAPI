@@ -320,7 +320,7 @@ router.put(
  * @swagger
  * /api/auth/forgot-password:
  *   post:
- *     summary: Quên mật khẩu - Gửi email hướng dẫn đặt lại mật khẩu
+ *     summary: Quên mật khẩu (Forgot Password) - Gửi email hướng dẫn đặt lại mật khẩu
  *     description: Gửi email chứa liên kết và token đặt lại mật khẩu nếu email tồn tại trong hệ thống. Áp dụng giới hạn tần suất 3 requests / 15 phút.
  *     tags: [Auth]
  *     security: []
