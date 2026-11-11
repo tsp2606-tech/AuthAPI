@@ -22,7 +22,7 @@ const authorizeRoles = (...allowedRoles) => {
       // Cập nhật role mới nhất vào req.user để các middleware/controller khác có thể dùng
       req.user.role = user.role;
       next();
-    } catch (error) {
+    } catch {
       return res.status(500).json({
         message: "Lỗi máy chủ nội bộ",
         error: "ServerError",

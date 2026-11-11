@@ -1,4 +1,4 @@
-const errorHandler = (err, req, res, next) => {
+const errorHandler = (err, req, res, _next) => {
   if (process.env.NODE_ENV !== "test") {
     console.error("[Error Handler]", err.message || err);
   }
